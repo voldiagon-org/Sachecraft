@@ -1,23 +1,192 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sachecraft 2D</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<title>Sachecraft</title>
+<style>
+body { background: #222; margin:0; overflow:hidden; font-family:sans-serif; }
+canvas { background: #88d; display:block; margin:0 auto; image-rendering: pixelated; }
+.slot {
+  width: 60px; height: 60px;
+  border: 2px solid #555;
+  background: rgba(255,255,255,0.1);
+  text-align: center; line-height: 60px;
+  font-size: 12px; color: white;
+}
+#hotbar {
+  position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+  display: grid; grid-template-columns: repeat(10, 60px); gap: 4px;
+}
+#inventory-container {
+  position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.8); padding: 20px;
+  display: none; flex-direction: column; align-items: center; gap: 20px;
+}
+#crafting-container { display: flex; gap: 20px; }
+#crafting-grid {
+  display: grid; grid-template-columns: repeat(3, 60px); gap: 4px;
+}
+#inventory-grid {
+  display: grid; grid-template-columns: repeat(10, 60px); gap: 4px;
+}
+.selected { border-color: yellow; }
+</style>
 </head>
 <body>
-  <canvas id="game"></canvas>
-  <div id="hotbar"></div>
+<canvas id="game" width="800" height="600"></canvas>
 
-  <div id="inventory-container" style="display:none;">
-    <div id="crafting-container">
-      <div id="crafting-grid"></div>
-      <div id="crafting-result" class="slot"></div>
-    </div>
-    <div id="inventory-grid"></div>
+<div id="hotbar"></div>
+
+<div id="inventory-container">
+  <div id="crafting-container">
+    <div id="crafting-grid"></div>
+    <div id="crafting-result" class="slot"></div>
   </div>
+  <div id="inventory-grid"></div>
+</div>
 
-  <script type="module" src="main.js"></script>
+<script>
+const BLOCK = { Air:0, Stone:1, Dirt:2, Grass:3, Wood:4, Leaves:5 }
+const blockInfo = {
+  0: {name:"Air", color:"transparent"},
+  1: {name:"Stone", color:"#888"},
+  2: {name:"Dirt", color:"#964B00"},
+  3: {name:"Grass", color:"#4CAF50"},
+  4: {name:"Wood", color:"#A0522D"},
+  5: {name:"Leaves", color:"#228B22"}
+}
+
+const WORLD_WIDTH = 100
+const WORLD_HEIGHT = 50
+const TILE_SIZE = 16
+let world = []
+
+// Inventory
+const INV_ROWS = 4, INV_COLS = 10, HOTBAR_SIZE = 10
+let inventory = Array.from({ length: INV_ROWS }, () =>
+  Array.from({ length: INV_COLS }, () => ({ id: 0, count: 0 }))
+)
+let hotbar = Array.from({ length: HOTBAR_SIZE }, () => ({ id: 0, count: 0 }))
+let selectedHotbarSlot = 0
+
+// Crafting
+let crafting = Array.from({ length: 3 }, () =>
+  Array.from({ length: 3 }, () => ({ id: 0, count: 0 }))
+)
+let craftingResult = { id: 0, count: 0 }
+
+function generateWorld() {
+  for (let y = 0; y < WORLD_HEIGHT; y++) {
+    world[y] = []
+    for (let x = 0; x < WORLD_WIDTH; x++) {
+      let height = Math.floor(20 + Math.sin(x/10) * 5)
+      if (y > height) world[y][x] = BLOCK.Air
+      else if (y === height) world[y][x] = BLOCK.Grass
+      else if (y > height - 4) world[y][x] = BLOCK.Dirt
+      else world[y][x] = BLOCK.Stone
+    }
+  }
+  // Trees
+  for (let x = 5; x < WORLD_WIDTH-5; x += Math.floor(Math.random()*8+6)) {
+    let y = 0
+    while (y < WORLD_HEIGHT-1 && world[y+1][x] === BLOCK.Air) y++
+    if (world[y][x] === BLOCK.Grass) placeTree(x, y)
+  }
+}
+
+function placeTree(x, groundY) {
+  for (let y = 1; y <= 4; y++) world[groundY - y][x] = BLOCK.Wood
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -2; dy <= 2; dy++) {
+      if (Math.abs(dx) + Math.abs(dy) < 3) {
+        let tx = x+dx, ty = groundY - 4 + dy
+        if (tx>=0 && tx<WORLD_WIDTH && ty>=0) {
+          world[ty][tx] = BLOCK.Leaves
+        }
+      }
+    }
+  }
+}
+
+function renderWorld(ctx) {
+  for (let y = 0; y < WORLD_HEIGHT; y++) {
+    for (let x = 0; x < WORLD_WIDTH; x++) {
+      let block = blockInfo[world[y][x]]
+      if (block.color !== "transparent") {
+        ctx.fillStyle = block.color
+        ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE)
+      }
+    }
+  }
+}
+
+function renderHotbar() {
+  const hotbarDiv = document.getElementById('hotbar')
+  hotbarDiv.innerHTML = ''
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
+    const item = hotbar[i]
+    const div = document.createElement('div')
+    div.className = 'slot' + (i === selectedHotbarSlot ? ' selected' : '')
+    div.innerText = item.id ? `${blockInfo[item.id].name} (${item.count})` : ''
+    hotbarDiv.appendChild(div)
+  }
+}
+
+function renderInventory() {
+  const invGrid = document.getElementById('inventory-grid')
+  invGrid.innerHTML = ''
+  for (let y = 0; y < INV_ROWS; y++) {
+    for (let x = 0; x < INV_COLS; x++) {
+      const item = inventory[y][x]
+      const div = document.createElement('div')
+      div.className = 'slot'
+      div.innerText = item.id ? `${blockInfo[item.id].name} (${item.count})` : ''
+      invGrid.appendChild(div)
+    }
+  }
+}
+
+function renderCrafting() {
+  const grid = document.getElementById('crafting-grid')
+  grid.innerHTML = ''
+  for (let y = 0; y < 3; y++) {
+    for (let x = 0; x < 3; x++) {
+      const item = crafting[y][x]
+      const div = document.createElement('div')
+      div.className = 'slot'
+      div.innerText = item.id ? `${blockInfo[item.id].name} (${item.count})` : ''
+      grid.appendChild(div)
+    }
+  }
+  const resultDiv = document.getElementById('crafting-result')
+  resultDiv.innerText = craftingResult.id ? `${blockInfo[craftingResult.id].name} (${craftingResult.count})` : ''
+}
+
+function toggleInventory() {
+  const invUI = document.getElementById('inventory-container')
+  const isHidden = invUI.style.display === 'none'
+  invUI.style.display = isHidden ? 'flex' : 'none'
+}
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Tab') {
+    e.preventDefault()
+    toggleInventory()
+  }
+  if (e.key >= '1' && e.key <= '9') {
+    selectedHotbarSlot = parseInt(e.key) - 1
+    renderHotbar()
+  }
+  if (e.key === '0') { selectedHotbarSlot = 9; renderHotbar() }
+})
+
+generateWorld()
+renderHotbar()
+renderInventory()
+renderCrafting()
+
+const ctx = document.getElementById('game').getContext('2d')
+renderWorld(ctx)
+</script>
 </body>
 </html>
