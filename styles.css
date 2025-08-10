@@ -1,10 +1,54 @@
-html, body {
-  margin: 0;
-  padding: 0;
-  background: #87ceeb;
-  height: 100%;
-  overflow: hidden;
+body {
+  background: #222;
+  color: white;
+  font-family: sans-serif;
 }
-#game {
-  display: block;
+
+.slot {
+  width: 60px;
+  height: 60px;
+  border: 2px solid #555;
+  background: rgba(255,255,255,0.1);
+  text-align: center;
+  line-height: 60px;
+}
+
+#hotbar {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(10, 60px);
+  gap: 4px;
+}
+
+#inventory-container {
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+#crafting-container {
+  display: flex;
+  gap: 20px;
+}
+
+#crafting-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 60px);
+  gap: 4px;
+}
+
+#inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 60px);
+  gap: 4px;
 }
